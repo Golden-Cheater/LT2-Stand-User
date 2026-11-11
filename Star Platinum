@@ -11,13 +11,14 @@ local userid = tostring(lplr.UserId)
 local role = (userid == owner and "owner") or (userid == stand and "stand")
 
 if not role then
- 	return warn("[Star Platinum]: You Are Not The Owner Or The Stand!")
+  return warn("[Star Platinum]: You Are Not The Owner Or The Stand!")
 end
 
 local ws = WebSocket.connect("ws://node19.botkeep.cloud:61476/ws")
 local active,paired = true,false
 local char,hum,hrp
 local follow,owner_conn,owner_hrp
+local api
 
 local function notify(...)
   local args = {...}
@@ -97,49 +98,63 @@ for _,entry in list do
 end
 
 local function CleanUp()
+  if not active then
+    return
+  end
   active,paired = false,false
   unsummon()
   char_conn:Disconnect()
   pcall(ws.Close,ws)
- 	genv.StandAPI = nil
+  if genv.StandAPI == api then
+    genv.StandAPI = nil
+  end
 end
 
 ws.OnMessage:Connect(function(raw)
- 	local msg = https:JSONDecode(raw)
- 	if msg.type == "paired" then
- 	 	paired = true
- 	 	warn("[Star Platinum]: Paired As "..role)
- 	 	if role == "owner" then
- 	 	 	notify("Commands: "..table.concat(names,", "),10)
- 	 	else
- 	 	 	notify("Successfully Paired With An Owner.")
- 	 	end
- 	elseif msg.type == "rejected" then
- 	 	warn("[Star Platinum]: "..msg.reason)
- 	 	CleanUp()
- 	elseif msg.type == "cmd" and role == "stand" then
- 	 	local command = commands[string.lower(tostring(msg.argument[1]))]
- 	 	if command then
- 	 	 	task.spawn(command)
- 	 	end
- 	end
+  local msg = https:JSONDecode(raw)
+  if msg.type == "paired" then
+    paired = true
+    warn("[Star Platinum]: Paired As "..role)
+    if role == "owner" then
+      notify("Commands: "..table.concat(names,", "),10)
+    else
+      notify("Successfully Paired With An Owner.")
+    end
+  elseif msg.type == "rejected" then
+    warn("[Star Platinum]: "..msg.reason)
+    CleanUp()
+  elseif msg.type == "cmd" and role == "stand" then
+    local command = commands[string.lower(tostring(msg.argument[1]))]
+    if command then
+      task.spawn(command)
+    end
+  end
 end)
 
-ws.OnClose:Connect(CleanUp)
+ws.OnClose:Connect(function()
+  if active then
+    warn("[Star Platinum]: Disconnected!")
+    CleanUp()
+  end
+end)
 
 send({type = "join",owner = owner,stand = stand,userid = userid,role = role})
 
 task.spawn(function()
- 	while active and not paired do
- 	 	task.wait(20)
- 	 	send({type = "ping"})
- 	end
+  while active do
+    task.wait(20)
+    send({type = "ping"})
+  end
 end)
 
-genv.StandAPI = {
- 	send = function(...)
- 	 	if role == "owner" and paired then
- 	 	 	send({type = "cmd",argument = {...}})
- 	 	end
- 	end,
+api = {
+  send = function(...)
+    if role == "owner" and paired then
+      send({type = "cmd",argument = {...}})
+    end
+  end,
 }
+
+genv.StandAPI = api
+
+notify("Successfully Paired As "..role)
