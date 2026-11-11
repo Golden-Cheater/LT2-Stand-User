@@ -1,0 +1,11 @@
+local plrs = game:GetService("Players")
+local lplr = plrs.LocalPlayer
+local userid = lplr.UserId
+local https = game:GetService("HttpService")
+local owner = getgenv().Owner
+local stand = getgenv().Stand
+local role = (userid == owner and "owner") or (userid == stand and "stand") or nil
+if not owner or not stand then
+  warn("Not The Owner Or Stand!")
+  return
+end
