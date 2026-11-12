@@ -300,15 +300,14 @@ ws.OnClose:Connect(function()
   end
 end)
 
-local secret = tostring(genv.Secret or "")
 if role == "owner" then
-  send({type = "create", owner = owner, stand = stand, userid = userid, secret = secret})
+  send({type = "create", owner = owner, stand = stand, userid = userid})
 else
   local code = string.upper(tostring(genv.Code or ""))
   if code == "" then
     return warn("[Star Platinum]: Owner must give you a code. Set getgenv().Code = \"XXXXXX\" before executing.")
   end
-  send({type = "join", code = code, userid = userid, secret = secret})
+  send({type = "join", code = code, userid = userid})
 end
 
 task.spawn(function()
