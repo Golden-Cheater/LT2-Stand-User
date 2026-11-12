@@ -300,14 +300,24 @@ ws.OnClose:Connect(function()
   end
 end)
 
+local invite = genv.Invite == true
+
 if role == "owner" then
-  send({type = "create", owner = owner, stand = stand, userid = userid})
-else
-  local code = string.upper(tostring(genv.Code or ""))
-  if code == "" then
-    return warn("[Star Platinum]: Owner must give you a code. Set getgenv().Code = \"XXXXXX\" before executing.")
+  if invite then
+    send({type = "create", owner = owner, stand = stand, userid = userid})
+  else
+    send({type = "join", owner = owner, stand = stand, role = "owner", userid = userid})
   end
-  send({type = "join", code = code, userid = userid})
+else
+  if invite then
+    local code = string.upper(tostring(genv.Code or ""))
+    if code == "" then
+      return warn("[Star Platinum]: Invite=true requires getgenv().Code = \"XXXXXX\" before executing.")
+    end
+    send({type = "join", code = code, userid = userid})
+  else
+    send({type = "join", owner = owner, stand = stand, role = "stand", userid = userid})
+  end
 end
 
 task.spawn(function()
