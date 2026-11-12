@@ -14,7 +14,11 @@ if not role then
   return warn("[Star Platinum]: You Are Not The Owner Or The Stand!")
 end
 
-local ws = WebSocket.connect("ws://node19.botkeep.cloud:61476/ws")
+local ok_ws, ws = pcall(WebSocket.connect, "wss://jojo-bridge.bot-keep.xyz/ws")
+if not ok_ws then
+  return warn("[Star Platinum]: Failed to connect: "..tostring(ws))
+end
+
 local active,paired,summoned = true,false,false
 local char,hum,hrp,stand_char
 local follow,owner_conn,owner_hrp
@@ -45,7 +49,7 @@ end
 
 local function send(data)
   if active then
-    ws:Send(https:JSONEncode(data))
+    pcall(function() ws:Send(https:JSONEncode(data)) end)
   end
 end
 
@@ -255,23 +259,35 @@ local function CleanUp()
 end
 
 ws.OnMessage:Connect(function(raw)
-  local msg = https:JSONDecode(raw)
-  if msg.type == "paired" then
+  local ok_dec, msg = pcall(https.JSONDecode, https, raw)
+  if not ok_dec or type(msg) ~= "table" then return end
+
+  if msg.type == "created" then
+    notify("Code: "..tostring(msg.code).." — share with your stand", 15)
+    print("[Star Platinum]: Your code is "..tostring(msg.code))
+
+  elseif msg.type == "paired" then
     paired = true
-    warn("[Star Platinum]: Paired As "..role)
+    print("[Star Platinum]: Paired As "..role)
     if role == "owner" then
       notify("Commands: "..table.concat(names,", "),10)
     else
       notify("Successfully Paired With An Owner.")
     end
+
   elseif msg.type == "rejected" then
-    warn("[Star Platinum]: "..msg.reason)
+    warn("[Star Platinum]: "..tostring(msg.reason))
     CleanUp()
+
   elseif msg.type == "cmd" and role == "stand" then
-    local command = commands[string.lower(tostring(msg.argument[1]))]
+    local cmd_name = string.lower(tostring(msg.argument[1]))
+    local command = commands[cmd_name]
     if command then
-      task.spawn(command)
+      task.spawn(command, table.unpack(msg.argument, 2))
+    else
+      warn("[Star Platinum]: Unknown command: "..tostring(msg.argument[1]))
     end
+
   elseif msg.type == "result" and role == "owner" and type(msg.data) == "table" then
     setsummoned(msg.data.summoned == true)
   end
@@ -279,12 +295,21 @@ end)
 
 ws.OnClose:Connect(function()
   if active then
-    warn("[Star Platinum]: Disconnected")
+    print("[Star Platinum]: Disconnected")
     CleanUp()
   end
 end)
 
-send({type = "join",owner = owner,stand = stand,userid = userid,role = role})
+local secret = tostring(genv.Secret or "")
+if role == "owner" then
+  send({type = "create", owner = owner, stand = stand, userid = userid, secret = secret})
+else
+  local code = string.upper(tostring(genv.Code or ""))
+  if code == "" then
+    return warn("[Star Platinum]: Owner must give you a code. Set getgenv().Code = \"XXXXXX\" before executing.")
+  end
+  send({type = "join", code = code, userid = userid, secret = secret})
+end
 
 task.spawn(function()
   while active do
@@ -295,9 +320,9 @@ end)
 
 api = {
   send = function(...)
-    if role == "owner" and paired then
-      send({type = "cmd",argument = {...}})
-    end
+    if role ~= "owner" then return warn("[Star Platinum]: Only the owner can send commands") end
+    if not paired then return warn("[Star Platinum]: Not paired yet") end
+    send({type = "cmd",argument = {...}})
   end,
 }
 
